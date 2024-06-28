@@ -1,8 +1,13 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import AddUser from "./AddUser";
+import { useUserStore } from "../lib/userStore";
+import { doc, getDoc, onSnapshot } from "firebase/firestore";
+import { db } from "../lib/firebase";
+import { useChatStore } from "../lib/chatStore";
 
 const ChatList = () => {
   const [addMode, setAddMode] = useState(false);
+  const [chats, setChat] = useState([]);
   const modalRef = useRef(null);
 
   const closeModal = (e) => {
@@ -10,7 +15,33 @@ const ChatList = () => {
       setAddMode(false);
     }
   };
+  const { currentUser } = useUserStore();
+  const { changeChat, chatId } = useChatStore();
 
+  useEffect(() => {
+    const unsub = onSnapshot(
+      doc(db, "userchats", currentUser.id),
+      async (res) => {
+        const items = res.data().chats;
+        const promises = items.map( async(item) => {
+          const userDocRef = doc(db, "users", item.receverId);
+          const userDocSnap = await getDoc(userDocRef);
+          const user = userDocSnap.data();
+          return { ...item, user };
+        });
+        const chatData = await Promise.all(promises);
+
+        setChat(chatData.sort((a, b) => b.updatedAt - a.updatedAt));
+      }
+    );
+
+    return () => {
+      unsub();
+    };
+  }, [currentUser.id]);
+const handleSelect = async(chat) => {
+changeChat(chat.chatId, chat.user)
+}
   return (
     <div className="flex-1 scrollbar-thumb-slate-700 scrollbar-track-slate-600  scrollbar-thin overflow-y-auto">
       <div className="flex items-center gap-[20px] px-[20px] mb-5">
@@ -30,19 +61,23 @@ const ChatList = () => {
         />
       </div>
 
-      <div
-        className="flex items-center px-3 border-b border-[#dddddd35]"
-      >
-        <img
-          src="./avatar.png"
-          alt=""
-          className="w-[50px] h-[50px] rounded-full"
-        />
-        <div className="flex flex-col items-start p-[20px] cursor-pointer ">
-          <span>Jane Doe</span>
-          <p className="text-[.8rem]">Hello</p>
+      {chats.map((chat) => (
+        <div
+          onClick={() => handleSelect(chat)}
+          key={chat.chatId}
+          className="flex items-center px-3 border-b border-[#dddddd35]"
+        >
+          <img
+            src={chat.user.avatar || "./avatar.png"}
+            alt=""
+            className="w-[50px] h-[50px] rounded-full"
+          />
+          <div className="flex flex-col items-start p-[20px] cursor-pointer ">
+            <span>{chat.user.username}</span>
+            <p className="text-[.8rem]">{chat.lastMessage}</p>
+          </div>
         </div>
-      </div>
+      ))}
       {addMode && (
         <div
           ref={modalRef}

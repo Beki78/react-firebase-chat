@@ -1,19 +1,35 @@
 import React, { useEffect, useRef, useState } from "react";
 import EmojiPickere from "emoji-picker-react";
+import { doc, onSnapshot } from "firebase/firestore";
+import { db } from "../lib/firebase";
+import { useChatStore } from "../lib/chatStore";
 const Chat = () => {
+  const { chatId } = useChatStore();
+
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
-    const endRef = useRef(null);
-
+  const [chat, setChat] = useState();
+  const endRef = useRef(null);
 
   const handleEmoji = (e) => {
     setText((prev) => prev + e.emoji);
     setOpen(false);
   };
   useEffect(() => {
-    endRef.current?.scrollIntoView({behavior: "smooth"})
-  }, [])
-  
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, []);
+
+  useEffect(() => {
+    const unSub = onSnapshot(doc(db, "chats", chatId), (res) => {
+      setChat(res.data());
+    });
+
+    return () => {
+      unSub();
+    };
+  }, [chatId]);
+  console.log(chat);
+
   return (
     <div className="flex-[2] flex flex-col border-l-2 border-r-2 border-[#dddddd35] h-full">
       <div className="p-5 flex items-center border-b-2 border-[#dddddd35]">
@@ -37,26 +53,26 @@ const Chat = () => {
         </div>
       </div>
       <div className="flex-1 p-5 scrollbar-thumb-slate-700 scrollbar-track-slate-600  scrollbar-thin overflow-y-auto flex flex-col">
-        <div className="max-w-[70%] flex gap-5">
-          <img
-            src="./avatar.png"
-            alt=""
-            className="w-8 h-8 object-contain rounded-full"
-          />
-          <div>
+        {chat?.messages?.map((message) => (
+          <div key={message?.createdAt} className="max-w-[70%] flex gap-5">
             <img
-              src="https://unsplash.com/photos/a-night-sky-filled-with-stars-and-trees-AKgtApn4Tec"
+              src="./avatar.png"
               alt=""
-              className="w-full h-[300px] object-cover rounded-md mb-2"
+              className="w-8 h-8 object-contain rounded-full"
             />
-            <p className="bg-oDarkBlue p-2 rounded-b-2xl rounded-tr-2xl text-[.9rem]">
-              Lorem ipsum dolor sit, amet consectetur adipisicing elit. Veniam
-              neque atque corporis ut beatae minima nisi exercitationem minus
-              fugiat inventore.
-            </p>
-            <small>1 min ago</small>
+            <div>
+              {message.image && <img
+                src={message.image}
+                alt=""
+                className="w-full h-[300px] object-cover rounded-md mb-2"
+              />}
+              <p className="bg-oDarkBlue p-2 rounded-b-2xl rounded-tr-2xl text-[.9rem]">
+                {message.text}
+              </p>
+              {/* <small>{message.createdAt}</small> */}
+            </div>
           </div>
-        </div>
+        ))}
         <div ref={endRef}></div>
       </div>
 
