@@ -1,10 +1,18 @@
 import React, { useEffect, useRef, useState } from "react";
 import EmojiPickere from "emoji-picker-react";
-import { doc, onSnapshot } from "firebase/firestore";
+import {
+  arrayUnion,
+  doc,
+  getDoc,
+  onSnapshot,
+  updateDoc,
+} from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useChatStore } from "../lib/chatStore";
+import { useUserStore } from "../lib/userStore";
 const Chat = () => {
-  const { chatId } = useChatStore();
+  const { chatId, user } = useChatStore();
+  const { currentUser } = useUserStore();
 
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
@@ -29,6 +37,43 @@ const Chat = () => {
     };
   }, [chatId]);
   console.log(chat);
+
+  const handleSend = async () => {
+    if (!text === "") return;
+
+    try {
+      await updateDoc(doc(db, "chats", chatId), {
+        message: arrayUnion({
+          senderId: currentUser,
+          text,
+          createdAt: new Date(),
+        }),
+      });
+
+      const userIDs = [currentUser.id, user.id];
+
+      userIDs.forEach(async (id) => {
+        const userChatRef = doc(db, "userchats", id);
+        const userChatSnapShot = await getDoc(userChatRef);
+
+        if (userChatSnapShot.exists()) {
+          const userChatData = userChatSnapShot.data();
+          const chatIndex = userChatData.chats.findIndex(
+            (c) => c.chatId === chatId
+          );
+          userChatData.chats[chatIndex].lastMessage = text;
+          userChatData.chats[chatIndex].isSeen = id === currentUser.id ? true : false;
+          userChatData.chats[chatIndex].updatedAt = Date.now();
+
+          await updateDoc(userChatRef, {
+            chats: userChatData.chats,
+          });
+        }
+      });
+    } catch (error) {
+      console.log(error);
+    }
+  };
 
   return (
     <div className="flex-[2] flex flex-col border-l-2 border-r-2 border-[#dddddd35] h-full">
@@ -61,11 +106,13 @@ const Chat = () => {
               className="w-8 h-8 object-contain rounded-full"
             />
             <div>
-              {message.image && <img
-                src={message.image}
-                alt=""
-                className="w-full h-[300px] object-cover rounded-md mb-2"
-              />}
+              {message.image && (
+                <img
+                  src={message.image}
+                  alt=""
+                  className="w-full h-[300px] object-cover rounded-md mb-2"
+                />
+              )}
               <p className="bg-oDarkBlue p-2 rounded-b-2xl rounded-tr-2xl text-[.9rem]">
                 {message.text}
               </p>
@@ -101,7 +148,10 @@ const Chat = () => {
               <EmojiPickere open={open} onEmojiClick={handleEmoji} />
             </div>
           </div>
-          <button className="bg-blue-600 text-white py-2 px-5 rounded-md hover:bg-blue-700">
+          <button
+            onClick={handleSend}
+            className="bg-blue-600 text-white py-2 px-5 rounded-md hover:bg-blue-700"
+          >
             Send
           </button>
         </div>
